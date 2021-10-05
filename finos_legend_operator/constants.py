@@ -9,3 +9,5 @@ GITLAB_REQUIRED_SCOPES = ["openid", "profile", "api"]
 
 VALID_APPLICATION_LOG_LEVEL_SETTINGS = [
     "INFO", "WARN", "DEBUG", "TRACE", "OFF"]
+
+TRUSTSTORE_TYPE_JKS = "jks"
