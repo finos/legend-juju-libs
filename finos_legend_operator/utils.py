@@ -3,6 +3,7 @@
 
 import base64
 import logging
+import subprocess
 import traceback
 
 from OpenSSL import crypto
@@ -67,7 +68,7 @@ def parse_base64_certificate(b64_cert):
     if not isinstance(b64_cert, (str, bytes)):
         raise ValueError(
             "Argument must be either str or bytes. Got: %s" % b64_cert)
-    
+
     raw_cert = base64.b64decode(b64_cert)
     formats = [crypto.FILETYPE_PEM, crypto.FILETYPE_ASN1]
     format_errors = {}
@@ -80,22 +81,20 @@ def parse_base64_certificate(b64_cert):
             format_errors[fmt] = traceback.format_exc()
     if not certificate:
         raise ValueError(
-            "Failed to load certificate. Per-format errors were: %s",
-            format_errors)
+            "Failed to load certificate. Per-format errors were: %s" % (
+                format_errors))
     return certificate
 
 
-def create_jks_truststore_with_certificates(truststore_name, certificates):
+def create_jks_truststore_with_certificates(certificates):
     """Creates a `jks.truststore` with the provided certificates.
 
     Args:
-        truststore_name: string name of the truststore.
         certificates: dict of the form:
         {
             "cert1": <OpenSSL.crypto.X509>,
             "cert2": <OpenSSL.crypto.X509>
         }
-
 
     Returns:
         `jks.KeyStore` with the provided certificates added as trusted.
@@ -107,7 +106,7 @@ def create_jks_truststore_with_certificates(truststore_name, certificates):
             isinstance(c, crypto.X509) for c in certificates.values()]):
         raise ValueError(
             "Requires a dictionary of strings to `OpenSSL.crypto.X509` "
-            "instances. Got: %r", certificates)
+            "instances. Got: %r" % certificates)
 
     cert_entries = []
     for cert_name, cert in certificates.items():
@@ -116,3 +115,10 @@ def create_jks_truststore_with_certificates(truststore_name, certificates):
         cert_entries.append(entry)
     return jks.KeyStore.new(
         constants.TRUSTSTORE_TYPE_JKS, cert_entries)
+
+
+def get_ip_address():
+    """Simply runs a `unit-get private-address` to return the IP address."""
+    ip_address = subprocess.check_output(
+        ["unit-get", "private-address"])
+    return ip_address.decode().strip()
