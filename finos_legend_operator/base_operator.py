@@ -264,9 +264,12 @@ class BaseFinosLegendCharm(charm.CharmBase):
         # Check provided truststore params:
         required_truststore_prefs_keys = [
             "truststore_path", "truststore_passphrase", "trusted_certificates"]
-        if not isinstance(truststore_preferences, dict) and not (
-                all([k in truststore_preferences
-                     for k in required_truststore_prefs_keys])):
+        if not isinstance(truststore_preferences, dict):
+            return model.BlockedStatus(
+                "invalid JKS truststore preferences: %s" % (
+                    truststore_preferences))
+        if not all([truststore_preferences.get(k)
+                    for k in required_truststore_prefs_keys]):
             return model.BlockedStatus(
                 "invalid JKS truststore preferences: %s" % (
                     truststore_preferences))

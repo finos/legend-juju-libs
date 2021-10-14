@@ -87,7 +87,7 @@ def parse_base64_certificate(b64_cert):
 
 
 def create_jks_truststore_with_certificates(certificates):
-    """Creates a `jks.truststore` with the provided certificates.
+    """Creates a `jks.KeyStore` with the provided certificates.
 
     Args:
         certificates: dict of the form:
@@ -102,7 +102,9 @@ def create_jks_truststore_with_certificates(certificates):
     Raises:
         ValueError: if provided anything but a list of `OpenSSL.crypto.X509`s.
     """
-    if not isinstance(certificates, dict) and not all([
+    if not isinstance(certificates, dict):
+        raise ValueError("Requires dict of strings, got: %s")
+    if not all([
             isinstance(c, crypto.X509) for c in certificates.values()]):
         raise ValueError(
             "Requires a dictionary of strings to `OpenSSL.crypto.X509` "
