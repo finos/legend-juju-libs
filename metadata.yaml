@@ -1,0 +1,29 @@
+# Copyright 2021 Canonical
+# See LICENSE file for licensing details.
+
+name: finos-legend-libs
+display-name: FINOS Legend Libraies
+
+# TODO(aznashwan): ask who should be here:
+maintainer: Nashwan Azhari <nazhari@cloudbasesolutions.com>
+
+summary: |
+  Shell charm housing a library to facilitate the development and
+  testing of FINOS Legend charmed Operators.
+
+description: |
+  This charm offers two libraries, `charms.finos_legend_libs.v0.legend_operator_base`,
+  and `charms.finos_legend_libs.v0.legend_operator_testing`.
+  The `legend_operator_base` library allows quick modeling of FINOS Legend services
+  which feature a one-preconfigured-container workload.
+  The `legend_operator_testing` library offers a quick and easy framework to plug
+  actual charm classes into for testing.
+
+containers:
+  noop:
+    resource: noop-image
+
+resources:
+  noop-image:
+    type: oci-image
+    description: Noop image, can be anything.

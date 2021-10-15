@@ -12,9 +12,18 @@ import yaml
 from ops import model
 from ops import testing as ops_testing
 
-from finos_legend_operator import constants
-from finos_legend_operator import base_operator
-from finos_legend_operator import utils
+from charms.finos_legend_libs.v0 import legend_operator_base
+
+
+# The unique Charmhub library identifier, never change it
+LIBID = "e3d6d34826fd4581b2ddb197334f6961"
+
+# Increment this major API version when introducing breaking changes
+LIBAPI = 0
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 2
 
 
 TEST_CERTIFICATE_BASE64 = """
@@ -34,11 +43,12 @@ BanzjI7vm6nh29V8Z4VGpH7mRhZ69+AnHRhG7rrV97WuBN3DnPq+YpOgJv6Og5bln1DOndbG+Xb7
 3zOuf4sfitPvZKqGF/aZUAhZ3KbCs0NVRCMHSieExEy9APR3xOPGuwBIlfbzO8FhM+k1mkEpQfum
 noMqQQqz5jpU2SD5w0+nqOctqS2GvEk=
 """
-# NOTE: `utils.parse_base64_certificate` is independently unit tested.
-TEST_CERTIFICATE = utils.parse_base64_certificate(TEST_CERTIFICATE_BASE64)
+
+# NOTE: `legend_operator_base.parse_base64_certificate` is independently unit tested.
+TEST_CERTIFICATE = legend_operator_base.parse_base64_certificate(TEST_CERTIFICATE_BASE64)
 
 
-class BaseFinosLegendTestCharm(base_operator.BaseFinosLegendCharm):
+class BaseFinosLegendTestCharm(legend_operator_base.BaseFinosLegendCharm):
     """Class for inheriting from the base Charm class and overidding/mocking
     relevant parts to test its functionality.
     The easiest way of using this class involves simply inheritting it and using its
@@ -56,7 +66,7 @@ class BaseFinosLegendTestCharm(base_operator.BaseFinosLegendCharm):
         WORKLOAD_SERVICE_NAMES[0]: {
             "services": {
                 WORKLOAD_SERVICE_NAMES[0]: {
-                    "command": "basc -c 'echo yes'"}}}}
+                    "command": "bash -c 'echo yes'"}}}}
 
     SERVICE_CONFIG_FILES = {
         "/legend-test-1.json": '{"some": "json"}',
@@ -103,21 +113,30 @@ class BaseFinosLegendTestCharm(base_operator.BaseFinosLegendCharm):
     def _get_service_configs_clone(self, relation_data):
         """Should return the same as `self._get_service_configs` but should NOT
         call it directly to not taint test results."""
-        return self.RELATIONS_DATA
+        return copy.deepcopy(self.SERVICE_CONFIG_FILES)
 
 
 class BaseFinosLegendCharmTestCase(unittest.TestCase):
+    """Base TestCase class for quick test setup.
+
+    This class offers the following functionality:
+    * automatically setting up mocks for the utility functions from `legend_operator_base`.
+    * skeleton tests which cover all abstract methods which child classes of
+      `legend_operator_base.BaseFinosLegendCharm` should have.
+    * some utility methods for testing
+
+    To use this class, simply override `_set_up_harness` with your setup of choice.
+    Note that the class you pass to the harness must be an instance of
+    `BaseFinosLegendTestCharm`.
+    Note that neither `begin` nor `begin_with_initial_hooks` are called during `setUp`.
+    """
 
     MOCK_TRUSTSTORE_DATA = "Mock Legend JKS TrustStore data."
 
     def setUp(self):
         super().setUp()
 
-        # Patches all names in `base_operator` and adds them as attributes
-        # (prefixed with `mocked_*`) to the test case class.
-        for method in ['utils']:
-            setattr(self, "mocked_%s" % method, self.patch(base_operator, method))
-        self._set_up_utils_mock(self.mocked_utils)
+        self._set_up_utils_mocks()
 
         self.harness = self._set_up_harness()
 
@@ -134,17 +153,21 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         """Returns an `ops_testing.Harness` instance."""
         raise NotImplementedError("No harness setup implemented.")
 
-    def _set_up_utils_mock(self, utils_mock):
-        """Sets up the MagicMock to be the `finos_legend_operator.utils` package."""
-        truststore_mock = mock.MagicMock()
-        truststore_mock.saves.return_value = self.MOCK_TRUSTSTORE_DATA
-        utils_mock.create_jks_truststore_with_certificates = mock.MagicMock()
-        utils_mock.create_jks_truststore_with_certificates.return_value = (
-            truststore_mock)
-        utils_mock.add_file_to_container = mock.MagicMock()
-        utils_mock.add_file_to_container.return_value = True
-        utils_mock.parse_base64_certificate = mock.MagicMock()
-        utils_mock.parse_base64_certificate.return_value = TEST_CERTIFICATE
+    def _set_up_utils_mocks(self):
+        """Sets up mocks for all the utility methods in the library."""
+        utility_funtions_to_patch = [
+            'create_jks_truststore_with_certificates',
+            'add_file_to_container',
+            'parse_base64_certificate',
+            'get_ip_address']
+        for item in utility_funtions_to_patch:
+            setattr(self, "mocked_%s" % item, self.patch(legend_operator_base, item))
+        self.truststore_mock = mock.MagicMock()
+        self.truststore_mock.saves.return_value = self.MOCK_TRUSTSTORE_DATA
+        self.mocked_create_jks_truststore_with_certificates.return_value = (
+            self.truststore_mock)
+        self.mocked_add_file_to_container.return_value = True
+        self.mocked_parse_base64_certificate.return_value = TEST_CERTIFICATE
 
     def _emit_container_ready(self):
         container_name = self.harness.charm._get_workload_container_name()
@@ -165,7 +188,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         option_name = "log-level-option"
         self.harness.begin_with_initial_hooks()
         # Test all valid options:
-        for log_opt in constants.VALID_APPLICATION_LOG_LEVEL_SETTINGS:
+        for log_opt in legend_operator_base.VALID_APPLICATION_LOG_LEVEL_SETTINGS:
             self.harness.update_config({option_name: log_opt})
             self.assertEqual(
                 self.harness.charm._get_logging_level_from_config(option_name), log_opt)
@@ -214,13 +237,8 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         self.harness.begin()
 
         container = mock.MagicMock()
-        add_files_mock = self.mocked_utils.add_file_to_container
+        add_files_mock = self.mocked_add_file_to_container
         add_files_mock.return_value = True
-        truststore_mock = mock.MagicMock()
-        truststore_mock.saves.return_value = self.MOCK_TRUSTSTORE_DATA
-        self.mocked_utils.create_jks_truststore_with_certificates = mock.MagicMock()
-        self.mocked_utils.create_jks_truststore_with_certificates.return_value = (
-            truststore_mock)
 
         # Bad inputs:
         self.assertIsInstance(
@@ -241,13 +259,13 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
             self.harness.charm._setup_jks_truststore(container, correct_jks_prefs))
         add_files_mock.assert_called_once_with(
             container, correct_jks_prefs['truststore_path'],
-            truststore_mock.saves.return_value, raise_on_error=False)
+            self.truststore_mock.saves.return_value, raise_on_error=False)
 
         # JKS trust creation fails:
-        self.mocked_utils.add_file_to_container = mock.MagicMock()
-        add_files_mock = self.mocked_utils.add_file_to_container
+        add_files_mock = self.mocked_add_file_to_container
+        add_files_mock.reset_mock()
         add_files_mock.return_value = True
-        self.mocked_utils.create_jks_truststore_with_certificates.side_effect = ValueError
+        self.mocked_create_jks_truststore_with_certificates.side_effect = ValueError
         self.assertIsInstance(
             self.harness.charm._setup_jks_truststore(container, correct_jks_prefs),
             model.BlockedStatus)
@@ -255,13 +273,13 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
         # Container write fails:
         add_files_mock.return_value = False
-        self.mocked_utils.create_jks_truststore_with_certificates.side_effect = None
+        self.mocked_create_jks_truststore_with_certificates.side_effect = None
         self.assertIsInstance(
             self.harness.charm._setup_jks_truststore(container, correct_jks_prefs),
             model.BlockedStatus)
         add_files_mock.assert_called_once_with(
             container, correct_jks_prefs['truststore_path'],
-            truststore_mock.saves.return_value, raise_on_error=False)
+            self.truststore_mock.saves.return_value, raise_on_error=False)
 
     def _add_relation(self, relation_name, relation_data):
         relator_name = "%s-relator" % relation_name
@@ -274,11 +292,11 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
     def _test_relations_waiting(self, _container_stop_mock, _container_start_mock):
         """Progressively adds relations and tests that the
-        `base_operator.BaseFinosLegendCharm` class behaves accordingly.
+        `legend_operator_base.BaseFinosLegendCharm` class behaves accordingly.
 
         Args:
-            _container_start_mock: mock of `ops.testing._TestingPebbleClient.start_services`
             _container_stop_mock: mock of `ops.testing._TestingPebbleClient.stop_services`
+            _container_start_mock: mock of `ops.testing._TestingPebbleClient.start_services`
         """
         def _check_charm_missing_relations(relation_names):
             # We initially expect it to block complaining about missing relations:
@@ -288,18 +306,12 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
                 self.harness.charm.unit.status.message,
                 "missing following relations: %s" % ", ".join(relation_names))
 
-            # Config retrieval should have never been attempted:
-            get_configs_mock.assert_not_called()
-
             # Services should be called to stop with any non-standard status:
             _container_stop_mock.assert_called_with(
                 tuple(self.harness.charm._get_workload_service_names()))
 
         self.harness.set_leader()
         self.harness.begin_with_initial_hooks()
-        get_configs_mock = mock.MagicMock()
-        self.harness.charm._get_service_configs = get_configs_mock
-        get_configs_mock.return_value = self.harness.charm._get_service_configs_clone({})
 
         # We initially expect it to complain about all relations:
         _check_charm_missing_relations(self.harness.charm.RELATIONS)
@@ -316,10 +328,8 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
                 _check_charm_missing_relations(missing_rels)
 
         trust_prefs = self.harness.charm._get_jks_truststore_preferences()
-        self.mocked_utils.create_jks_truststore_with_certificates.assert_has_calls(
+        self.mocked_create_jks_truststore_with_certificates.assert_has_calls(
             [mock.call(trust_prefs["trusted_certificates"])])
-        get_configs_mock.assert_has_calls(
-            [mock.call(self.harness.charm._get_relations_test_data())])
 
         # Check all config files present:
         container = self.harness.charm.unit.get_container(
@@ -331,7 +341,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
             0, mock.call(
                 container, trust_prefs["truststore_path"],
                 self.MOCK_TRUSTSTORE_DATA, raise_on_error=False))
-        self.mocked_utils.add_file_to_container.assert_has_calls(
+        self.mocked_add_file_to_container.assert_has_calls(
             config_file_write_calls)
 
         # By this point, the services configs should have been written and
@@ -342,63 +352,31 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
             self.harness.charm.unit.status, model.ActiveStatus)
 
 
-class TestBaseFinosLegendCharm(BaseFinosLegendCharmTestCase):
-
-    @classmethod
-    def _set_up_harness(cls):
-        rel_data = {
-            rel: {"interface": "%s-interfaces" % rel}
-            for rel in BaseFinosLegendTestCharm._get_required_relations()}
-        charm_meta = {
-            "name": "legend-base-test",
-            "requires": {"ingress": {"interface": "ingress"}},
-            "provides": rel_data,
-            "containers": {
-                BaseFinosLegendTestCharm._get_workload_container_name(): {
-                    "resource": "image"}},
-            "resources": {"image": {"type": "oci-image"}}}
-        harness = ops_testing.Harness(
-            BaseFinosLegendTestCharm,
-            meta=yaml.dump(charm_meta))
-        return harness
-
-    def test_workload_container(self):
-        self._test_workload_container()
-
-    def test_get_logging_level_from_config(self):
-        self._test_get_logging_level_from_config()
-
-    def test_setup_jks_truststore(self):
-        self._test_setup_jks_truststore()
-
-    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
-    def test_get_relation(self, _stop_legend_services):
-        self._test_get_relation()
-
-    @mock.patch("ops.testing._TestingPebbleClient.start_services")
-    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
-    def test_relations_waiting(self, _container_stop, _container_start):
-        self._test_relations_waiting(_container_stop, _container_start)
-
-
 class BaseFinosLegendCoreServiceTestCharm(
-        base_operator.BaseFinosLegendCoreServiceCharm, BaseFinosLegendTestCharm):
+        legend_operator_base.BaseFinosLegendCoreServiceCharm, BaseFinosLegendTestCharm):
+    """Testing Charm class for Legend services requiring Gitlab/Mongo relations.
 
+    Override the class attributes of this class as well as the parent
+    `BaseFinosLegendTestCharm` for easy setup of a skeleton class to use in test
+    suites or slot functionality in to test.
+    """
     REDIRECT_URIS = ["http://service.legend:443/callback"]
 
+    DB_RELATION_NAME = "legend_db"
+    GITLAB_RELATION_NAME = "legend_gitlab"
     # NOTE(aznashwan): DB relation is always checked first:
-    RELATIONS = ['legend_db', 'legend_gitlab']
+    RELATIONS = [DB_RELATION_NAME, GITLAB_RELATION_NAME]
     RELATIONS_DATA = {
-        "legend_db": {"database": "relation test data"},
-        "legend_gitlab": {"gitlab": "relation test data"}}
+        DB_RELATION_NAME: {"database": "DB relation test data"},
+        GITLAB_RELATION_NAME: {"gitlab": "GitLab relation test data"}}
 
     @classmethod
     def _get_legend_gitlab_relation_name(cls):
-        return "legend_gitlab"
+        return cls.GITLAB_RELATION_NAME
 
     @classmethod
     def _get_legend_db_relation_name(cls):
-        return "legend_db"
+        return cls.DB_RELATION_NAME
 
     def _get_legend_gitlab_redirect_uris(self):
         return self.REDIRECT_URIS
@@ -408,6 +386,16 @@ class BaseFinosLegendCoreServiceTestCharm(
 
 
 class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
+    """More specialized implementation of a `BaseFinosLegendCharmTestCase`.
+
+    This class offers all the functioality of `BaseFinosLegendCharmTestCase` while also hooking
+    in testing logic for charms with a GitLab and MongoDB relation dependency.
+
+    To use this class, simply override `_set_up_harness` with your setup of choice.
+    Note that the class you pass to the harness must be an instance of
+    `BaseFinosLegendTestCharm`.
+    Note that neither `begin` nor `begin_with_initial_hooks` are called during `setUp`.
+    """
 
     @classmethod
     def _set_up_harness(cls):
@@ -427,7 +415,11 @@ class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
             meta=yaml.dump(charm_meta))
         return harness
 
-    @mock.patch("ops.testing._TestingPebbleClient.start_services")
-    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
-    def test_relations_waiting(self, _container_stop, _container_start):
-        self._test_relations_waiting(_container_stop, _container_start)
+    def _test_relations_waiting(self, _container_stop, _container_start):
+        """Test charm properly waits for all relations before starting.
+
+        Args:
+            _container_stop_mock: mock of `ops.testing._TestingPebbleClient.stop_services`
+            _container_start_mock: mock of `ops.testing._TestingPebbleClient.start_services`
+        """
+        super()._test_relations_waiting(_container_stop, _container_start)
