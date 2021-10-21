@@ -1,25 +1,163 @@
 # Copyright 2021 Canonical
 # See LICENSE file for licensing details.
 
-"""Module defining the Base FINOS Legend Charmed operator class."""
+"""Module defining the Base FINOS Legend Charmed operator classes and utilities."""
 
 import abc
+import base64
 import logging
+import subprocess
 import traceback
 
+import jks
 from ops import charm
 from ops import framework
 from ops import model
-
-from finos_legend_operator import constants
-from finos_legend_operator import utils
+from OpenSSL import crypto
 
 from charms.finos_legend_db_k8s.v0 import legend_database
 from charms.finos_legend_gitlab_integrator_k8s.v0 import legend_gitlab
 from charms.nginx_ingress_integrator.v0 import ingress
 
 
+# The unique Charmhub library identifier, never change it
+LIBID = "43dd472db93a416eae84a8206e96c2ce"
+
+# Increment this major API version when introducing breaking changes
+LIBAPI = 0
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 2
+
 logger = logging.getLogger(__name__)
+
+APPLICATION_CONNECTOR_TYPE_HTTP = "http"
+APPLICATION_CONNECTOR_TYPE_HTTPS = "https"
+GITLAB_REQUIRED_SCOPES = ["openid", "profile", "api"]
+
+VALID_APPLICATION_LOG_LEVEL_SETTINGS = [
+    "INFO", "WARN", "DEBUG", "TRACE", "OFF"]
+
+TRUSTSTORE_TYPE_JKS = "jks"
+
+
+def add_file_to_container(
+        container, file_path, file_data, make_dirs=True,
+        raise_on_error=True):
+    """Adds a file with the given data under the given filepath via Pebble API.
+
+    Args:
+        container: `ops.model.Container` instance to add the file into.
+        file_path: string absolute path to the file to write.
+        file_data: string data to write into the file.
+        make_dirs: whether or not to create parent directories if needed.
+        raise_on_error: whether or not the function should re-raise errors.
+
+    Returns:
+        True if the file was successfully added, False (or raises) otherwise.
+
+    Raises:
+        ops.prebble.ProtocolError: if the container connection fails.
+        ops.pebble.PathError: if the path is invalid and/or make_dirs=False
+    """
+    logger.debug(
+        "Adding file '%s' in container '%s'", file_path, container.name)
+    try:
+        container.push(file_path, file_data, make_dirs=make_dirs)
+    except Exception:
+        logger.error(
+            "Exception occurred while adding file '%s' in container '%s':\n%s",
+            file_path, container.name, traceback.format_exc())
+        if raise_on_error:
+            raise
+        return False
+    logger.debug(
+        "Successfully added file '%s' in container '%s'",
+        file_path, container.name)
+    return True
+
+
+def parse_base64_certificate(b64_cert):
+    """Parses the provided base64-encoded X509 certificate and returns the
+    afferent `OpenSSL.crypto.X509` instance for it.
+
+    Args:
+        b64_cert: str or bytes representation of the base64-encoded cert.
+
+    Returns:
+        `OpenSSL.crypto.X509` instance.
+
+    Raises:
+        ValueError: on input/base64 formatting issues.
+        OpenSSL.crypto.Error: on any OpenSSL-related operation failing.
+    """
+    if not isinstance(b64_cert, (str, bytes)):
+        raise ValueError(
+            "Argument must be either str or bytes. Got: %s" % b64_cert)
+
+    raw_cert = base64.b64decode(b64_cert)
+    formats = [crypto.FILETYPE_PEM, crypto.FILETYPE_ASN1]
+    format_errors = {}
+    certificate = None
+    for fmt in formats:
+        try:
+            certificate = crypto.load_certificate(fmt, raw_cert)
+            break
+        except Exception:
+            format_errors[fmt] = traceback.format_exc()
+    if not certificate:
+        raise ValueError(
+            "Failed to load certificate. Per-format errors were: %s" % (
+                format_errors))
+    return certificate
+
+
+def create_jks_truststore_with_certificates(certificates):
+    """Creates a `jks.KeyStore` with the provided certificates.
+
+    Args:
+        certificates: dict of the form:
+        {
+            "cert1": <OpenSSL.crypto.X509>,
+            "cert2": <OpenSSL.crypto.X509>
+        }
+
+    Returns:
+        `jks.KeyStore` with the provided certificates added as trusted.
+
+    Raises:
+        ValueError: if provided anything but a list of `OpenSSL.crypto.X509`s.
+    """
+    if not isinstance(certificates, dict):
+        raise ValueError("Requires dict of strings, got: %s")
+    if not all([
+            isinstance(c, crypto.X509) for c in certificates.values()]):
+        raise ValueError(
+            "Requires a dictionary of strings to `OpenSSL.crypto.X509` "
+            "instances. Got: %r" % certificates)
+
+    cert_entries = []
+    for cert_name, cert in certificates.items():
+        dumped_cert = crypto.dump_certificate(crypto.FILETYPE_ASN1, cert)
+        entry = jks.TrustedCertEntry.new(cert_name, dumped_cert)
+        cert_entries.append(entry)
+    return jks.KeyStore.new(
+        TRUSTSTORE_TYPE_JKS, cert_entries)
+
+
+def get_ip_address():
+    """Simply runs a `unit-get private-address` to return the IP address.
+
+    Returns:
+        String IP address.
+
+    Raises:
+        `subprocess.CalledProcessError`: if there are any errors running the process.
+    """
+    ip_address = subprocess.check_output(
+        ["unit-get", "private-address"])
+    return ip_address.decode().strip()
 
 
 class BaseFinosLegendCharm(charm.CharmBase):
@@ -155,13 +293,13 @@ class BaseFinosLegendCharm(charm.CharmBase):
         Returns None if an option is invalid.
         """
         value = self.model.config[option_name]
-        if value not in constants.VALID_APPLICATION_LOG_LEVEL_SETTINGS:
+        if value not in VALID_APPLICATION_LOG_LEVEL_SETTINGS:
             logger.warning(
                 "Invalid Java logging level value provided for option "
                 "'%s': '%s'. Valid Java logging levels are: %s. The charm "
                 "shall block until a proper value is set.",
                 option_name, value,
-                constants.VALID_APPLICATION_LOG_LEVEL_SETTINGS)
+                VALID_APPLICATION_LOG_LEVEL_SETTINGS)
             return None
         return value
 
@@ -264,9 +402,12 @@ class BaseFinosLegendCharm(charm.CharmBase):
         # Check provided truststore params:
         required_truststore_prefs_keys = [
             "truststore_path", "truststore_passphrase", "trusted_certificates"]
-        if not isinstance(truststore_preferences, dict) and not (
-                all([k in truststore_preferences
-                     for k in required_truststore_prefs_keys])):
+        if not isinstance(truststore_preferences, dict):
+            return model.BlockedStatus(
+                "invalid JKS truststore preferences: %s" % (
+                    truststore_preferences))
+        if not all([truststore_preferences.get(k) is not None
+                    for k in required_truststore_prefs_keys]):
             return model.BlockedStatus(
                 "invalid JKS truststore preferences: %s" % (
                     truststore_preferences))
@@ -278,7 +419,7 @@ class BaseFinosLegendCharm(charm.CharmBase):
         # Create truststore:
         truststore = None
         try:
-            truststore = utils.create_jks_truststore_with_certificates(
+            truststore = create_jks_truststore_with_certificates(
                 truststore_preferences['trusted_certificates'])
         except Exception:
             logger.error(
@@ -289,7 +430,7 @@ class BaseFinosLegendCharm(charm.CharmBase):
         # Add truststore to container;
         dumped_truststore = truststore.saves(
             truststore_preferences['truststore_passphrase'])
-        if not utils.add_file_to_container(
+        if not add_file_to_container(
                 container, truststore_preferences['truststore_path'],
                 dumped_truststore, raise_on_error=False):
             return model.BlockedStatus(
@@ -393,10 +534,10 @@ class BaseFinosLegendCharm(charm.CharmBase):
             return
         for conf_path, conf_data in configs.items():
             try:
-                utils.add_file_to_container(
+                add_file_to_container(
                     container, conf_path, conf_data, make_dirs=True)
             except Exception:
-                # NOTE(aznashwan): `utils.add_file_to_container` already
+                # NOTE(aznashwan): `add_file_to_container` already
                 # logs the traceback so no point duplicating it here.
                 self._update_status_and_services(
                     container, model.BlockedStatus(
@@ -607,5 +748,5 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
             self._legend_gitlab_consumer.get_legend_gitlab_creds(None))
         if not gitlab_creds or 'gitlab_host_cert_b64' not in gitlab_creds:
             return None
-        return utils.parse_base64_certificate(
+        return parse_base64_certificate(
             gitlab_creds['gitlab_host_cert_b64'])
