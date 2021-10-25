@@ -213,6 +213,10 @@ class TestBaseFinosCoreServiceLegendCharm(
         harness = ops_testing.Harness(cls, meta=yaml.dump(charm_meta))
         return harness
 
+    def test_get_core_legend_service_configs(self):
+        """Tests `BaseFinosLegendCoreServiceCharm._get_core_legend_service_configs`."""
+        self._test_get_core_legend_service_configs()
+
     def test_relations_waiting(self):
         """Tests the whole lifecycle of `legend_operator_base.BaseFinosLegendCoreServiceCharm`."""
         self._test_relations_waiting()

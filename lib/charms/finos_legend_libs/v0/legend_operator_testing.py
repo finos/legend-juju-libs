@@ -4,6 +4,7 @@
 """Module defining base testing utilities for the library/child charms."""
 
 import abc
+import json
 import unittest
 from unittest import mock
 
@@ -354,13 +355,37 @@ class BaseFinosLegendCoreServiceTestCharm(
     @classmethod
     def _get_relations_test_data(cls):
         return {
-            cls._get_legend_db_relation_name(): {"database": "DB relation test data"},
-            cls._get_legend_gitlab_relation_name(): {"gitlab": "GitLab relation test data"}}
+            cls._get_legend_db_relation_name(): {
+                "legend-db-connection": json.dumps(
+                    {
+                        "username": "test_db_user",
+                        "password": "test_db_pass",
+                        "database": "test_db_name",
+                        "uri": "test_db_uri",
+                    }
+                )
+            },
+            cls._get_legend_gitlab_relation_name(): {
+                "legend-gitlab-connection": json.dumps(
+                    {
+                        "gitlab_host": "gitlab_test_host",
+                        "gitlab_port": 7667,
+                        "gitlab_scheme": "https",
+                        "client_id": "test_client_id",
+                        "client_secret": "test_client_secret",
+                        "openid_discovery_url": "test_discovery_url",
+                        "gitlab_host_cert_b64": "test_gitlab_cert",
+                    }
+                )
+            },
+        }
 
     def _get_legend_gitlab_redirect_uris(self):
         return ["http://service.legend:443/callback"]
 
     def _get_core_legend_service_configs(self, legend_db_credentials, legend_gitlab_credentials):
+        if any([not param for param in [legend_db_credentials, legend_gitlab_credentials]]):
+            return model.WaitingStatus("Missing params")
         return self._get_service_configs_clone({
             self._get_legend_db_relation_name(): legend_db_credentials,
             self._get_legend_gitlab_relation_name(): legend_gitlab_credentials
@@ -396,3 +421,31 @@ class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
             BaseFinosLegendCoreServiceTestCharm,
             meta=yaml.dump(charm_meta))
         return harness
+
+    def _test_get_core_legend_service_configs(self):
+        self.harness.begin_with_initial_hooks()
+
+        relations_test_data = self.harness.charm._get_relations_test_data()
+        db_creds = json.loads(
+            relations_test_data[
+                self.harness.charm._get_legend_db_relation_name()][
+                    "legend-db-connection"])
+        gitlab_creds = json.loads(
+            relations_test_data[
+                self.harness.charm._get_legend_gitlab_relation_name()][
+                    "legend-gitlab-connection"])
+
+        # Missing DB data:
+        self.assertIsInstance(
+            self.harness.charm._get_core_legend_service_configs(None, None),
+            model.WaitingStatus)
+
+        # Missing GitLab data:
+        self.assertIsInstance(
+            self.harness.charm._get_core_legend_service_configs(db_creds, None),
+            model.WaitingStatus)
+
+        # Missing GitLab data:
+        self.assertNotIsInstance(
+            self.harness.charm._get_core_legend_service_configs(db_creds, gitlab_creds),
+            model.WaitingStatus)
