@@ -187,11 +187,9 @@ class TestBaseFinosLegendCharm(legend_operator_testing.BaseFinosLegendCharmTestC
         """Tests `legend_operator_base.BaseFinosLegendCharm._get_relation`."""
         self._test_get_relation()
 
-    @mock.patch("ops.testing._TestingPebbleClient.start_services")
-    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
-    def test_relations_waiting(self, _container_stop, _container_start):
+    def test_relations_waiting(self):
         """Tests the whole lifecycle of `legend_operator_base.BaseFinosLegendCharm`."""
-        self._test_relations_waiting(_container_stop, _container_start)
+        self._test_relations_waiting()
 
 
 class TestBaseFinosCoreServiceLegendCharm(
@@ -215,8 +213,6 @@ class TestBaseFinosCoreServiceLegendCharm(
         harness = ops_testing.Harness(cls, meta=yaml.dump(charm_meta))
         return harness
 
-    @mock.patch("ops.testing._TestingPebbleClient.start_services")
-    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
-    def test_relations_waiting(self, _container_stop, _container_start):
+    def test_relations_waiting(self):
         """Tests the whole lifecycle of `legend_operator_base.BaseFinosLegendCoreServiceCharm`."""
-        self._test_relations_waiting(_container_stop, _container_start)
+        self._test_relations_waiting()

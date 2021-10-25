@@ -271,12 +271,14 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
             rel_id, relator_name, relation_data)
         return rel_id
 
-    def _test_relations_waiting(self, _container_stop_mock, _container_start_mock):
+    @mock.patch("ops.testing._TestingPebbleClient.restart_services")
+    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
+    def _test_relations_waiting(self, _container_stop_mock, _container_restart_mock):
         """Progressively adds relations and tests that charm class behaves accordingly.
 
         Args:
             _container_stop_mock: mock of `ops.testing._TestingPebbleClient.stop_services`
-            _container_start_mock: mock of `ops.testing._TestingPebbleClient.start_services`
+            _container_restart_mock: mock of `ops.testing._TestingPebbleClient.restart_services`
         """
         def _check_charm_missing_relations(relation_names):
             # We initially expect it to block complaining about missing relations:
@@ -326,7 +328,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
         # By this point, the services configs should have been written and
         # the services should have been started:
-        _container_start_mock.assert_has_calls(
+        _container_restart_mock.assert_has_calls(
             [mock.call(tuple(self.harness.charm._get_workload_service_names()))])
         self.assertIsInstance(
             self.harness.charm.unit.status, model.ActiveStatus)
@@ -394,12 +396,3 @@ class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
             BaseFinosLegendCoreServiceTestCharm,
             meta=yaml.dump(charm_meta))
         return harness
-
-    def _test_relations_waiting(self, _container_stop, _container_start):
-        """Test charm properly waits for all relations before starting.
-
-        Args:
-            _container_stop_mock: mock of `ops.testing._TestingPebbleClient.stop_services`
-            _container_start_mock: mock of `ops.testing._TestingPebbleClient.start_services`
-        """
-        super()._test_relations_waiting(_container_stop, _container_start)
