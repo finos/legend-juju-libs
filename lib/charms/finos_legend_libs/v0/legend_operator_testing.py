@@ -287,7 +287,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
                 self.harness.charm.unit.status, model.BlockedStatus)
             self.assertEqual(
                 self.harness.charm.unit.status.message,
-                "missing following relations: %s" % ", ".join(relation_names))
+                "missing following relations: %s" % ", ".join(sorted(relation_names)))
 
             # Services should be called to stop with any non-standard status:
             _container_stop_mock.assert_called_with(

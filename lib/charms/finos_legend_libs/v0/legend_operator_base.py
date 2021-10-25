@@ -485,7 +485,9 @@ class BaseFinosLegendCharm(charm.CharmBase):
             self._update_status_and_services(
                 container, model.BlockedStatus(
                     "missing following relations: %s" % (
-                        ", ".join(missing_relations))))
+                        # NOTE(aznashwan): we sort these to get predictable
+                        # statuses we can later test for:
+                        ", ".join(sorted(missing_relations)))))
             return
 
         # Setup JKS truststore:
