@@ -1,4 +1,4 @@
-# Copyright 2021 Canonical
+# Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """Module defining the Base FINOS Legend Charmed operator classes and utilities."""
@@ -10,15 +10,11 @@ import subprocess
 import traceback
 
 import jks
-from ops import charm
-from ops import framework
-from ops import model
-from OpenSSL import crypto
-
 from charms.finos_legend_db_k8s.v0 import legend_database
 from charms.finos_legend_gitlab_integrator_k8s.v0 import legend_gitlab
 from charms.nginx_ingress_integrator.v0 import ingress
-
+from OpenSSL import crypto
+from ops import charm, framework, model
 
 # The unique Charmhub library identifier, never change it
 LIBID = "43dd472db93a416eae84a8206e96c2ce"
@@ -79,8 +75,7 @@ def add_file_to_container(
 
 
 def parse_base64_certificate(b64_cert):
-    """Parses the provided base64-encoded X509 certificate and returns the
-    afferent `OpenSSL.crypto.X509` instance for it.
+    """Parses the provided base64-encoded X509 certificate.
 
     Args:
         b64_cert: str or bytes representation of the base64-encoded cert.
@@ -161,9 +156,7 @@ def get_ip_address():
 
 
 class BaseFinosLegendCharm(charm.CharmBase):
-    """Base class which abstracts base functionality shared amongst FINOS
-    Legend Charmed operators with the aim of minimising implementation
-    duplication.
+    """Base class which abstracts base functionality shared amongst FINOS Legend Charms.
 
     The core assumptions made by this class on the Charm's workload are:
     * the workload will consist of a simple set of Legend Services
@@ -208,8 +201,7 @@ class BaseFinosLegendCharm(charm.CharmBase):
     @classmethod
     @abc.abstractmethod
     def _get_required_relations(cls):
-        """Returns a list of relation names which should be considered
-        mandatory for the Legend service to be started.
+        """Returns a list of relation names required for the service to start.
 
         Returns:
             list(str) of relation names denoting mandatory relations.
@@ -241,8 +233,8 @@ class BaseFinosLegendCharm(charm.CharmBase):
 
     @abc.abstractmethod
     def _get_jks_truststore_preferences(self):
-        """Returns preferences on how the JKS truststore should be created
-        within the workload container.
+        """Returns preferences on how the JKS truststore should be set up for the service.
+
         Can return `None` to indicate no JKS truststore setup is required.
 
         Returns: None or dict of the form:
@@ -281,14 +273,14 @@ class BaseFinosLegendCharm(charm.CharmBase):
         raise NotImplementedError("No Legend service config implemented.")
 
     def _get_logging_level_from_config(self, option_name) -> str:
-        """Fetches the config option with the given name and checks to
-        ensure that it is a valid `java.utils.logging` log level.
+        """Fetches the config option with the given name and validates it.
 
         Args:
             option_name: string name of the config option.
 
         Returns:
-            String logging level to be passed to the Legend service.
+            String logging level to be passed to the Legend service complying to the
+            `java.utils.logging` standard Java library.
 
         Returns None if an option is invalid.
         """
@@ -321,16 +313,20 @@ class BaseFinosLegendCharm(charm.CharmBase):
         return None
 
     def _update_charm_status(self, status: model.StatusBase):
-        """Sets the provided status for this unit as well as the application
-        itself. (given the unit is the leader) """
+        """Sets the provided status for this unit.
+
+        Also sets it for the application as a while given the unit is the leader.
+        """
         self.unit.status = status
         if self.unit.is_leader():
             self.app.status = status
 
     def _update_status_and_services(
             self, container: model.Container, status: model.StatusBase):
-        """Updates the status of the charm (and parent app if the unit is the
-        leader) and performs the following action on the Legend service(s):
+        """Updates the status of the charm and Legend service(s).
+
+        Also updates the parent app if the unit is the leader.
+        Performs the following action on the Legend service(s) depending on status:
         * `model.ActiveStatus`: (re)starts the service(s)
         * `model.WaitingStatus`: no action taken
         * `model.BlockedStatus`: stops the service(s)
@@ -381,8 +377,7 @@ class BaseFinosLegendCharm(charm.CharmBase):
         return relation
 
     def _setup_jks_truststore(self, container, truststore_preferences):
-        """Sets up the JKS truststore in the provided container with the
-        properties returned by `_get_jks_truststore_preferences()`.
+        """Sets up the JKS truststore in the provided container.
 
         Args:
             container: the `model.Container` instance to add the truststore in.
@@ -453,7 +448,9 @@ class BaseFinosLegendCharm(charm.CharmBase):
         container.stop(*services)
 
     def _refresh_charm_status(self):
-        """Refreshes the Legend charm status by:
+        """Refreshes the Legend charm status.
+
+        Performs the following checks/acions:
         * checking if the Pebble API in the workload container is reachable
         * checking all relations present
         * setting up JKS truststore in container (if the service needs it)
@@ -572,8 +569,7 @@ class BaseFinosLegendCharm(charm.CharmBase):
 
 
 class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
-    """Base class which abstracts base functionality shared amongst FINOS
-    Legend Charmed core service operators.
+    """Base class which abstracts functionality for Core FINOS Legend services.
 
     The term "core service" is used to describe FINOS Legend services which:
     * the workload will consist of a simple set of Legend Services
@@ -627,8 +623,7 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
 
     @abc.abstractmethod
     def _get_legend_gitlab_redirect_uris(self):
-        """Returns a list of strings of redirect URIs to be set within the
-        GitLab application upon its creation."""
+        """Returns a list of strings of redirect URIs for this service."""
         raise NotImplementedError("No GitLab redirect URIs defined.")
 
     @classmethod
@@ -639,8 +634,7 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
 
     @classmethod
     def _get_required_relations(cls):
-        """Returns a list of relation names which should be considered
-        mandatory for the Legend service to be started.
+        """Returns a list of relation names required for the service to start.
 
         Returns:
             list(str) of relation names denoting mandatory relations.
@@ -652,6 +646,7 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
     def _get_core_legend_service_configs(
             self, legend_db_credentials, legend_gitlab_credentials):
         """Returns a list of config files required for the Legend service.
+
         This method will only get called once both the GitLab and Legend DB
         relation datas are present, so the arguments are non-void guaranteed.
 
@@ -685,9 +680,7 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
         raise NotImplementedError("No Core Legend service configs defined.")
 
     def _get_service_configs(self, relations_data):
-        """Overrides BaseFinosLegendCharm._get_service_configs() to add
-        explicit checks/waits for the GitLab and DB relations data.
-        """
+        """Adds GitLab/DB relation checks/waits before returning the config files."""
         # NOTE(aznashwan): the services do not support scaling and thus
         # there should only ever be one relation with each supporting
         # service, so we pass `None` as the `relation_id` to the
@@ -742,8 +735,7 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
         self._refresh_charm_status()
 
     def _get_legend_gitlab_certificate(self):
-        """Returns an `OpenSSL.X509` instance of the certificate from
-        the GitLab relation data."""
+        """Returns an `OpenSSL.X509` instance of the certificate of the related GitLab."""
         gitlab_creds = (
             self._legend_gitlab_consumer.get_legend_gitlab_creds(None))
         if not gitlab_creds or 'gitlab_host_cert_b64' not in gitlab_creds:
