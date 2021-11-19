@@ -1,19 +1,17 @@
-# Copyright 2021 Canonical
+# Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """Module defining base testing utilities for the library/child charms."""
 
 import abc
-import copy
+import json
 import unittest
 from unittest import mock
 
 import yaml
+from charms.finos_legend_libs.v0 import legend_operator_base
 from ops import model
 from ops import testing as ops_testing
-
-from charms.finos_legend_libs.v0 import legend_operator_base
-
 
 # The unique Charmhub library identifier, never change it
 LIBID = "e3d6d34826fd4581b2ddb197334f6961"
@@ -23,7 +21,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 
 TEST_CERTIFICATE_BASE64 = """
@@ -49,71 +47,57 @@ TEST_CERTIFICATE = legend_operator_base.parse_base64_certificate(TEST_CERTIFICAT
 
 
 class BaseFinosLegendTestCharm(legend_operator_base.BaseFinosLegendCharm):
-    """Class for inheriting from the base Charm class and overidding/mocking
-    relevant parts to test its functionality.
-    The easiest way of using this class involves simply inheritting it and using its
-    class attributes to specify which values to set.
-    """
-
-    PORT = 7667
-    WORKLOAD_CONTAINER_NAME = "legend"
-    WORKLOAD_SERVICE_NAMES = ["legend-test-service"]
-    RELATIONS = ['legend-test-rel-1', 'legend-test-rel-2']
-    RELATIONS_DATA = {
-        "legend-test-rel-1": {"rel1": "test1"},
-        "legend-test-rel-2": {"rel2": "test2"}}
-    PEBBLE_LAYERS = {
-        WORKLOAD_SERVICE_NAMES[0]: {
-            "services": {
-                WORKLOAD_SERVICE_NAMES[0]: {
-                    "command": "bash -c 'echo yes'"}}}}
-
-    SERVICE_CONFIG_FILES = {
-        "/legend-test-1.json": '{"some": "json"}',
-        "/legend-test-2.ini": "[section]\nwith_some = options"}
-    TRUSTSTORE_PREFERENCES = {
-        "truststore_path": "/path/to/truststore.jks",
-        "truststore_passphrase": "legend-test",
-        "trusted_certificates": {
-            "testing-cert-1": TEST_CERTIFICATE}}
+    """Base testing charm with some mocked relations/default values."""
 
     def __init__(self, framework):
         super().__init__(framework)
 
     @classmethod
     def _get_relations_test_data(cls):
-        return cls.RELATIONS_DATA
+        return {
+            "legend-test-rel-1": {"rel1": "test1"},
+            "legend-test-rel-2": {"rel2": "test2"}}
 
     @classmethod
     def _get_required_relations(cls):
-        return copy.deepcopy(cls.RELATIONS)
+        return ['legend-test-rel-1', 'legend-test-rel-2']
 
     @classmethod
     def _get_application_connector_port(cls):
-        return cls.PORT
+        return 7667
 
     @classmethod
     def _get_workload_container_name(cls):
-        return cls.WORKLOAD_CONTAINER_NAME
+        return "legend"
 
     @classmethod
     def _get_workload_service_names(cls):
-        return copy.deepcopy(cls.WORKLOAD_SERVICE_NAMES)
+        return ["legend-test-service"]
 
     @classmethod
     def _get_workload_pebble_layers(cls):
-        return cls.PEBBLE_LAYERS
+        return {
+            service_name: {
+                "services": {
+                    service_name: {
+                        "command": "bash -c 'echo yes'"}}}
+            for service_name in cls._get_workload_service_names()}
 
     def _get_jks_truststore_preferences(self):
-        return self.TRUSTSTORE_PREFERENCES
+        return {
+            "truststore_path": "/path/to/truststore.jks",
+            "truststore_passphrase": "legend-test",
+            "trusted_certificates": {
+                "testing-cert-1": TEST_CERTIFICATE}}
 
     def _get_service_configs(self, relations_data):
-        return copy.deepcopy(self.SERVICE_CONFIG_FILES)
+        return self._get_service_configs_clone(relations_data)
 
-    def _get_service_configs_clone(self, relation_data):
-        """Should return the same as `self._get_service_configs` but should NOT
-        call it directly to not taint test results."""
-        return copy.deepcopy(self.SERVICE_CONFIG_FILES)
+    def _get_service_configs_clone(self, relations_data):
+        """Shadow method for `_get_service_configs` to avoid calling it during testing."""
+        return {
+            "/legend-test-1.json": '{"some": "json"}',
+            "/legend-test-2.ini": "[section]\nwith_some = options"}
 
 
 class BaseFinosLegendCharmTestCase(unittest.TestCase):
@@ -134,6 +118,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
     MOCK_TRUSTSTORE_DATA = "Mock Legend JKS TrustStore data."
 
     def setUp(self):
+        """Sets up the testcase by mocking utility methods and calling `_set_up_harness()`."""
         super().setUp()
 
         self._set_up_utils_mocks()
@@ -176,9 +161,6 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
     def _test_workload_container(self):
         self.harness.begin()
-        # TODO(aznashwan): ask why this doesn't work:
-        # self.assertIsNone(self.harness.charm._workload_container)
-        self._emit_container_ready()
         self.assertEqual(
             self.harness.charm._workload_container,
             self.harness.model.unit.get_container(
@@ -290,13 +272,14 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
             rel_id, relator_name, relation_data)
         return rel_id
 
-    def _test_relations_waiting(self, _container_stop_mock, _container_start_mock):
-        """Progressively adds relations and tests that the
-        `legend_operator_base.BaseFinosLegendCharm` class behaves accordingly.
+    @mock.patch("ops.testing._TestingPebbleClient.restart_services")
+    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
+    def _test_relations_waiting(self, _container_stop_mock, _container_restart_mock):
+        """Progressively adds relations and tests that charm class behaves accordingly.
 
         Args:
             _container_stop_mock: mock of `ops.testing._TestingPebbleClient.stop_services`
-            _container_start_mock: mock of `ops.testing._TestingPebbleClient.start_services`
+            _container_restart_mock: mock of `ops.testing._TestingPebbleClient.restart_services`
         """
         def _check_charm_missing_relations(relation_names):
             # We initially expect it to block complaining about missing relations:
@@ -304,7 +287,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
                 self.harness.charm.unit.status, model.BlockedStatus)
             self.assertEqual(
                 self.harness.charm.unit.status.message,
-                "missing following relations: %s" % ", ".join(relation_names))
+                "missing following relations: %s" % ", ".join(sorted(relation_names)))
 
             # Services should be called to stop with any non-standard status:
             _container_stop_mock.assert_called_with(
@@ -314,7 +297,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         self.harness.begin_with_initial_hooks()
 
         # We initially expect it to complain about all relations:
-        _check_charm_missing_relations(self.harness.charm.RELATIONS)
+        _check_charm_missing_relations(self.harness.charm._get_required_relations())
 
         # Check behavior when progressively adding relations:
         added_rels = set()
@@ -346,7 +329,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
         # By this point, the services configs should have been written and
         # the services should have been started:
-        _container_start_mock.assert_has_calls(
+        _container_restart_mock.assert_has_calls(
             [mock.call(tuple(self.harness.charm._get_workload_service_names()))])
         self.assertIsInstance(
             self.harness.charm.unit.status, model.ActiveStatus)
@@ -354,35 +337,59 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
 class BaseFinosLegendCoreServiceTestCharm(
         legend_operator_base.BaseFinosLegendCoreServiceCharm, BaseFinosLegendTestCharm):
-    """Testing Charm class for Legend services requiring Gitlab/Mongo relations.
-
-    Override the class attributes of this class as well as the parent
-    `BaseFinosLegendTestCharm` for easy setup of a skeleton class to use in test
-    suites or slot functionality in to test.
-    """
-    REDIRECT_URIS = ["http://service.legend:443/callback"]
-
-    DB_RELATION_NAME = "legend_db"
-    GITLAB_RELATION_NAME = "legend_gitlab"
-    # NOTE(aznashwan): DB relation is always checked first:
-    RELATIONS = [DB_RELATION_NAME, GITLAB_RELATION_NAME]
-    RELATIONS_DATA = {
-        DB_RELATION_NAME: {"database": "DB relation test data"},
-        GITLAB_RELATION_NAME: {"gitlab": "GitLab relation test data"}}
-
+    """Testing Charm class for Legend services requiring Gitlab/Mongo relations."""
     @classmethod
     def _get_legend_gitlab_relation_name(cls):
-        return cls.GITLAB_RELATION_NAME
+        return "legend_gitlab"
 
     @classmethod
     def _get_legend_db_relation_name(cls):
-        return cls.DB_RELATION_NAME
+        return "legend_db"
+
+    @classmethod
+    def _get_required_relations(cls):
+        return [
+            cls._get_legend_db_relation_name(),
+            cls._get_legend_gitlab_relation_name()]
+
+    @classmethod
+    def _get_relations_test_data(cls):
+        return {
+            cls._get_legend_db_relation_name(): {
+                "legend-db-connection": json.dumps(
+                    {
+                        "username": "test_db_user",
+                        "password": "test_db_pass",
+                        "database": "test_db_name",
+                        "uri": "test_db_uri",
+                    }
+                )
+            },
+            cls._get_legend_gitlab_relation_name(): {
+                "legend-gitlab-connection": json.dumps(
+                    {
+                        "gitlab_host": "gitlab_test_host",
+                        "gitlab_port": 7667,
+                        "gitlab_scheme": "https",
+                        "client_id": "test_client_id",
+                        "client_secret": "test_client_secret",
+                        "openid_discovery_url": "test_discovery_url",
+                        "gitlab_host_cert_b64": "test_gitlab_cert",
+                    }
+                )
+            },
+        }
 
     def _get_legend_gitlab_redirect_uris(self):
-        return self.REDIRECT_URIS
+        return ["http://service.legend:443/callback"]
 
     def _get_core_legend_service_configs(self, legend_db_credentials, legend_gitlab_credentials):
-        return self.SERVICE_CONFIG_FILES
+        if any([not param for param in [legend_db_credentials, legend_gitlab_credentials]]):
+            return model.WaitingStatus("Missing params")
+        return self._get_service_configs_clone({
+            self._get_legend_db_relation_name(): legend_db_credentials,
+            self._get_legend_gitlab_relation_name(): legend_gitlab_credentials
+        })
 
 
 class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
@@ -415,11 +422,30 @@ class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
             meta=yaml.dump(charm_meta))
         return harness
 
-    def _test_relations_waiting(self, _container_stop, _container_start):
-        """Test charm properly waits for all relations before starting.
+    def _test_get_core_legend_service_configs(self):
+        self.harness.begin_with_initial_hooks()
 
-        Args:
-            _container_stop_mock: mock of `ops.testing._TestingPebbleClient.stop_services`
-            _container_start_mock: mock of `ops.testing._TestingPebbleClient.start_services`
-        """
-        super()._test_relations_waiting(_container_stop, _container_start)
+        relations_test_data = self.harness.charm._get_relations_test_data()
+        db_creds = json.loads(
+            relations_test_data[
+                self.harness.charm._get_legend_db_relation_name()][
+                    "legend-db-connection"])
+        gitlab_creds = json.loads(
+            relations_test_data[
+                self.harness.charm._get_legend_gitlab_relation_name()][
+                    "legend-gitlab-connection"])
+
+        # Missing DB data:
+        self.assertIsInstance(
+            self.harness.charm._get_core_legend_service_configs(None, None),
+            model.WaitingStatus)
+
+        # Missing GitLab data:
+        self.assertIsInstance(
+            self.harness.charm._get_core_legend_service_configs(db_creds, None),
+            model.WaitingStatus)
+
+        # Missing GitLab data:
+        self.assertNotIsInstance(
+            self.harness.charm._get_core_legend_service_configs(db_creds, gitlab_creds),
+            model.WaitingStatus)
