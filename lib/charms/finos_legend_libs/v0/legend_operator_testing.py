@@ -121,6 +121,8 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         """Sets up the testcase by mocking utility methods and calling `_set_up_harness()`."""
         super().setUp()
 
+        self.patch(legend_operator_base.k8s_svc_patch, 'KubernetesServicePatch')
+
         self._set_up_utils_mocks()
 
         self.harness = self._set_up_harness()

@@ -13,6 +13,7 @@ import jks
 from charms.finos_legend_db_k8s.v0 import legend_database
 from charms.finos_legend_gitlab_integrator_k8s.v0 import legend_gitlab
 from charms.nginx_ingress_integrator.v0 import ingress
+from charms.observability_libs.v0 import kubernetes_service_patch as k8s_svc_patch
 from OpenSSL import crypto
 from ops import charm, framework, model
 
@@ -185,6 +186,13 @@ class BaseFinosLegendCharm(charm.CharmBase):
                 "service-hostname": self.app.name,
                 "service-name": self.app.name,
                 "service-port": self._get_application_connector_port()})
+
+        self.service_patcher = k8s_svc_patch.KubernetesServicePatch(
+            self,
+            [
+                (f"{self.app.name}", 80, self._get_application_connector_port()),
+            ],
+        )
 
         # Standard charm lifecycle events:
         self.framework.observe(
