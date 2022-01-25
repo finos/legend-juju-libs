@@ -220,3 +220,10 @@ class TestBaseFinosCoreServiceLegendCharm(
     def test_relations_waiting(self):
         """Tests the whole lifecycle of `legend_operator_base.BaseFinosLegendCoreServiceCharm`."""
         self._test_relations_waiting()
+
+    def test_upgrade_charm(self):
+        """Tests Upgrade handle of `legend_operator_base.BaseFinosLegendCoreServiceCharm`.
+
+        This test will ensure that the Callback URIs are being updated.
+        """
+        self._test_upgrade_charm()
