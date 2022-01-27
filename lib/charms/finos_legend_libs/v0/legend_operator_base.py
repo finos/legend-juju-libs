@@ -724,6 +724,9 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
 
     def _update_gitlab_relation_callback_uris(self):
         relation = self._get_relation(self._get_legend_gitlab_relation_name())
+        if not relation:
+            return
+
         redirect_uris = self._get_legend_gitlab_redirect_uris()
         legend_gitlab.set_legend_gitlab_redirect_uris_in_relation_data(
             relation.data[self.app], redirect_uris)

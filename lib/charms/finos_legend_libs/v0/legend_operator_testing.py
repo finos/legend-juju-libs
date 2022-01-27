@@ -337,20 +337,30 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
             self.harness.charm.unit.status, model.ActiveStatus)
 
     @mock.patch("ops.testing._TestingPebbleClient.restart_services")
-    def _test_upgrade_charm(self, _container_restart_mock):
+    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
+    def _test_upgrade_charm(self, _container_stop_mock, _container_restart_mock):
         self.harness.set_leader()
         self.harness.begin_with_initial_hooks()
 
-        # Setting up the gitlab relation.
+        # We'll add the gitlab relation after the first upgrade.
         test_data = self.harness.charm._get_relations_test_data()
         gitlab_rel_name = self.harness.charm._get_legend_gitlab_relation_name()
         gitlab_rel_data = test_data.pop(gitlab_rel_name)
-        gitlab_rel_id = self._add_relation(gitlab_rel_name, gitlab_rel_data)
 
         # Add the rest of the relations.
         for rel_name, rel_data in test_data.items():
             self._add_relation(rel_name, rel_data)
             self.harness.update_config()
+
+        # Setup for the Upgrade Charm event and emit it.
+        mock_get_uris = self.patch(self.harness.charm, '_get_legend_gitlab_redirect_uris')
+        fake_callback_uris = ['legendary.callback.url']
+        mock_get_uris.return_value = fake_callback_uris
+        self.harness.charm.on.upgrade_charm.emit()
+        mock_get_uris.assert_not_called()
+
+        # Add the gitlab relation.
+        gitlab_rel_id = self._add_relation(gitlab_rel_name, gitlab_rel_data)
 
         # Assert that the unit is currently active.
         self.assertIsInstance(
@@ -358,13 +368,11 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
         # Assert that the initial Callback URIs have been set.
         relation_data = self.harness.get_relation_data(gitlab_rel_id, self.harness.charm.app)
-        expected_uris = self.harness.charm._get_legend_gitlab_redirect_uris()
-        expected_rel_data = {'legend-gitlab-redirect-uris': json.dumps(expected_uris)}
+        expected_rel_data = {'legend-gitlab-redirect-uris': json.dumps(fake_callback_uris)}
         self.assertDictEqual(expected_rel_data, relation_data)
 
-        # Setup for the Upgrade Event.
+        # Setup for the second Upgrade Event.
         fake_callback_uris = ['foo.lish']
-        mock_get_uris = self.patch(self.harness.charm, '_get_legend_gitlab_redirect_uris')
         mock_get_uris.return_value = fake_callback_uris
 
         # Emit the Upgrade Charm event.
