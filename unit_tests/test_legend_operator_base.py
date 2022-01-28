@@ -162,7 +162,15 @@ class TestBaseFinosLegendCharm(legend_operator_testing.BaseFinosLegendCharmTestC
             },
             "resources": {"image": {"type": "oci-image"}},
         }
-        config = {"options": {"log-level-option": {"type": "string"}}}
+        config = {
+            "options": {
+                "external-hostname": {
+                    "type": "string",
+                    "default": "",
+                },
+                "log-level-option": {"type": "string"},
+            },
+        }
         harness = ops_testing.Harness(
             legend_operator_testing.BaseFinosLegendTestCharm,
             meta=yaml.dump(charm_meta),
@@ -210,7 +218,17 @@ class TestBaseFinosCoreServiceLegendCharm(
             "containers": {cls._get_workload_container_name(): {"resource": "image"}},
             "resources": {"image": {"type": "oci-image"}},
         }
-        harness = ops_testing.Harness(cls, meta=yaml.dump(charm_meta))
+        charm_config = {
+            "options": {
+                "external-hostname": {
+                    "type": "string",
+                    "default": "",
+                },
+            },
+        }
+        harness = ops_testing.Harness(
+            cls, meta=yaml.dump(charm_meta), config=yaml.dump(charm_config)
+        )
         return harness
 
     def test_get_core_legend_service_configs(self):

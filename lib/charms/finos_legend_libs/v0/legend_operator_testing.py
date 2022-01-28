@@ -471,9 +471,18 @@ class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
                 BaseFinosLegendCoreServiceTestCharm._get_workload_container_name(): {
                     "resource": "image"}},
             "resources": {"image": {"type": "oci-image"}}}
+        charm_config = {
+            "options": {
+                "external-hostname": {
+                    "type": "string",
+                    "default": "",
+                },
+            },
+        }
         harness = ops_testing.Harness(
             BaseFinosLegendCoreServiceTestCharm,
-            meta=yaml.dump(charm_meta))
+            meta=yaml.dump(charm_meta),
+            config=yaml.dump(charm_config))
         return harness
 
     def _test_get_core_legend_service_configs(self):

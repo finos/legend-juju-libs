@@ -180,10 +180,10 @@ class BaseFinosLegendCharm(charm.CharmBase):
 
         self._set_stored_defaults()
 
-        # TODO(aznashwan): worth always setting up an ingress for all services?
+        svc_hostname = self.model.config["external-hostname"] or self.app.name
         self.ingress = ingress.IngressRequires(
             self, {
-                "service-hostname": self.app.name,
+                "service-hostname": svc_hostname,
                 "service-name": self.app.name,
                 "service-port": self._get_application_connector_port()})
 
@@ -557,6 +557,9 @@ class BaseFinosLegendCharm(charm.CharmBase):
 
     def _on_config_changed(self, event: charm.ConfigChangedEvent):
         """Refreshes the service config."""
+        # TODO(claudiub): Update the SDLC and Engine relations with the new Service URL.
+        svc_hostname = self.model.config["external-hostname"] or self.app.name
+        self.ingress.update_config({"service-hostname": svc_hostname})
         self._refresh_charm_status()
 
     def _on_workload_container_pebble_ready(
