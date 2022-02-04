@@ -25,7 +25,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 4
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,13 @@ class BaseFinosLegendCharm(charm.CharmBase):
             self, {
                 "service-hostname": svc_hostname,
                 "service-name": self.app.name,
-                "service-port": self._get_application_connector_port()})
+                "service-port": self._get_application_connector_port(),
+                # NOTE(claudiub): Comma-sepparated list of routes we want routed to this app.
+                "path-routes": self._get_ingress_routes(),
+                # NOTE(claudiub): If this option is enabled, the requests that match the paths
+                # above would be rewritten to "rewrite-target" (/ by default), which we do not
+                # need.
+                "rewrite-enabled": False})
 
         self.service_patcher = k8s_svc_patch.KubernetesServicePatch(
             self,
@@ -221,6 +227,21 @@ class BaseFinosLegendCharm(charm.CharmBase):
     def _get_application_connector_port(cls):
         """Returns the integer port number the application is listening on."""
         raise NotImplementedError("No application connector port defined.")
+
+    @classmethod
+    @abc.abstractmethod
+    def _get_ingress_routes(cls) -> str:
+        """Returns the ingress routes for this application.
+
+        Returns:
+            String representing a comma-separated list of routes that we want routed to this
+            application. This is useful when we want to access multiple applications using the
+            same hostname. For example:
+                http://finos-legend/api -> Legend SDLC
+                http://finos-legend/engine -> Legend Engine
+                http://finos-legend/ -> Legend Studio
+        """
+        raise NotImplementedError("No ingress routes defined.")
 
     @classmethod
     @abc.abstractmethod
