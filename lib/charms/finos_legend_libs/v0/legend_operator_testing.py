@@ -21,7 +21,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 
 TEST_CERTIFICATE_BASE64 = """
@@ -65,6 +65,10 @@ class BaseFinosLegendTestCharm(legend_operator_base.BaseFinosLegendCharm):
     @classmethod
     def _get_application_connector_port(cls):
         return 7667
+
+    @classmethod
+    def _get_ingress_routes(cls):
+        return "/legend"
 
     @classmethod
     def _get_workload_container_name(cls):
