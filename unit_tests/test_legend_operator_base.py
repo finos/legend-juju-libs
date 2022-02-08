@@ -239,6 +239,10 @@ class TestBaseFinosCoreServiceLegendCharm(
         """Tests the whole lifecycle of `legend_operator_base.BaseFinosLegendCoreServiceCharm`."""
         self._test_relations_waiting()
 
+    def test_update_config_gitlab_relation(self):
+        """Tests Update config handle of `legend_operator_base.BaseFinosLegendCoreServiceCharm`."""
+        self._test_update_config_gitlab_relation()
+
     def test_upgrade_charm(self):
         """Tests Upgrade handle of `legend_operator_base.BaseFinosLegendCoreServiceCharm`.
 

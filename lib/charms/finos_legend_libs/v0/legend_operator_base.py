@@ -25,7 +25,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 logger = logging.getLogger(__name__)
 
@@ -578,7 +578,6 @@ class BaseFinosLegendCharm(charm.CharmBase):
 
     def _on_config_changed(self, event: charm.ConfigChangedEvent):
         """Refreshes the service config."""
-        # TODO(claudiub): Update the SDLC and Engine relations with the new Service URL.
         svc_hostname = self.model.config["external-hostname"] or self.app.name
         self.ingress.update_config({"service-hostname": svc_hostname})
         self._refresh_charm_status()
@@ -754,6 +753,12 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
         redirect_uris = self._get_legend_gitlab_redirect_uris()
         legend_gitlab.set_legend_gitlab_redirect_uris_in_relation_data(
             relation.data[self.app], redirect_uris)
+
+    def _on_config_changed(self, event: charm.ConfigChangedEvent):
+        """Refreshes the service config."""
+        super()._on_config_changed(event)
+        # NOTE(claudiub): We need to update the gitlab integrator with the new URIs as well.
+        self._update_gitlab_relation_callback_uris()
 
     def _on_upgrade_charm(self, _: charm.UpgradeCharmEvent) -> None:
         self._update_gitlab_relation_callback_uris()
