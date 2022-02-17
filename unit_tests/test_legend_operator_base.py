@@ -168,6 +168,10 @@ class TestBaseFinosLegendCharm(legend_operator_testing.BaseFinosLegendCharmTestC
                     "type": "string",
                     "default": "",
                 },
+                "tls-secret-name": {
+                    "type": "string",
+                    "default": "",
+                },
                 "log-level-option": {"type": "string"},
             },
         }
@@ -221,6 +225,10 @@ class TestBaseFinosCoreServiceLegendCharm(
         charm_config = {
             "options": {
                 "external-hostname": {
+                    "type": "string",
+                    "default": "",
+                },
+                "tls-secret-name": {
                     "type": "string",
                     "default": "",
                 },

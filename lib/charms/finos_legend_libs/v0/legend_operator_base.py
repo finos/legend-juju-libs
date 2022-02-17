@@ -25,7 +25,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +191,8 @@ class BaseFinosLegendCharm(charm.CharmBase):
                 # NOTE(claudiub): If this option is enabled, the requests that match the paths
                 # above would be rewritten to "rewrite-target" (/ by default), which we do not
                 # need.
-                "rewrite-enabled": False})
+                "rewrite-enabled": False,
+                "tls-secret-name": self.model.config["tls-secret-name"]})
 
         self.service_patcher = k8s_svc_patch.KubernetesServicePatch(
             self,
