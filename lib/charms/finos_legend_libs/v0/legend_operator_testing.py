@@ -21,7 +21,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 6
 
 
 TEST_CERTIFICATE_BASE64 = """
@@ -520,10 +520,6 @@ class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
         charm_config = {
             "options": {
                 "external-hostname": {
-                    "type": "string",
-                    "default": "",
-                },
-                "tls-secret-name": {
                     "type": "string",
                     "default": "",
                 },
