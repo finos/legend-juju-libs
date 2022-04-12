@@ -25,7 +25,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 logger = logging.getLogger(__name__)
 
@@ -793,7 +793,7 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
         """Returns an `OpenSSL.X509` instance of the certificate of the related GitLab."""
         gitlab_creds = (
             self._legend_gitlab_consumer.get_legend_gitlab_creds(None))
-        if not gitlab_creds or 'gitlab_host_cert_b64' not in gitlab_creds:
+        if not gitlab_creds or not gitlab_creds.get('gitlab_host_cert_b64'):
             return None
         return parse_base64_certificate(
             gitlab_creds['gitlab_host_cert_b64'])
