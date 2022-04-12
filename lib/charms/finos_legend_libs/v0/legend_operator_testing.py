@@ -21,7 +21,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 
 TEST_CERTIFICATE_BASE64 = """
@@ -558,3 +558,23 @@ class TestBaseFinosCoreServiceLegendCharm(BaseFinosLegendCharmTestCase):
         self.assertNotIsInstance(
             self.harness.charm._get_core_legend_service_configs(db_creds, gitlab_creds),
             model.WaitingStatus)
+
+    @mock.patch.object(legend_operator_base, "parse_base64_certificate")
+    def _test_get_legend_gitlab_certificate(self, mock_parse_cert):
+        self.harness.begin_with_initial_hooks()
+        mock_get_creds = self.patch(
+            self.harness.charm._legend_gitlab_consumer, 'get_legend_gitlab_creds'
+        )
+        # Test with no credentials.
+        mock_get_creds.return_value = None
+        self.assertIsNone(self.harness.charm._get_legend_gitlab_certificate())
+
+        # Test with empty string certificate.
+        mock_get_creds.return_value = {"gitlab_host_cert_b64": ""}
+        self.assertIsNone(self.harness.charm._get_legend_gitlab_certificate())
+
+        # Test with a certificate.
+        mock_get_creds.return_value = {"gitlab_host_cert_b64": "some-cert"}
+        cert = self.harness.charm._get_legend_gitlab_certificate()
+        mock_parse_cert.assert_called_once_with("some-cert")
+        self.assertEqual(cert, mock_parse_cert.return_value)

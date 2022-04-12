@@ -249,3 +249,10 @@ class TestBaseFinosCoreServiceLegendCharm(
         This test will ensure that the Callback URIs are being updated.
         """
         self._test_upgrade_charm()
+
+    def test_get_legend_gitlab_certificate(self):
+        """Tests the _get_legend_gitlab_certificate method.
+
+        This test will ensure that the method will handle the received certificate properly.
+        """
+        self._test_get_legend_gitlab_certificate()
