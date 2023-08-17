@@ -346,7 +346,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         self.harness.set_leader()
         self.harness.begin_with_initial_hooks()
 
-        # Setup the URI getter mock,
+        # Setup the URI getter mock.
         mock_get_uris = self.patch(self.harness.charm, '_get_legend_gitlab_redirect_uris')
         fake_callback_uris = ['legendary.callback.url']
         mock_get_uris.return_value = fake_callback_uris
@@ -381,6 +381,36 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         relation_data = self.harness.get_relation_data(gitlab_rel_id, self.harness.charm.app)
         expected_rel_data = {'legend-gitlab-redirect-uris': json.dumps(fake_callback_uris)}
         self.assertDictEqual(expected_rel_data, relation_data)
+
+    @mock.patch("ops.testing._TestingPebbleClient.restart_services")
+    @mock.patch("ops.testing._TestingPebbleClient.stop_services")
+    def _test_update_config_gitlab_relation_without_being_leader(self, _container_stop_mock, _container_restart_mock):
+        self.harness.begin_with_initial_hooks()
+
+        # Add the gitlab integrator relation and grab its relation ID.
+        test_data = self.harness.charm._get_relations_test_data()
+        gitlab_rel_name = self.harness.charm._get_legend_gitlab_relation_name()
+        gitlab_rel_data = test_data.pop(gitlab_rel_name)
+        gitlab_rel_id = self._add_relation(gitlab_rel_name, gitlab_rel_data)
+
+        # Add the rest of the necessary relations.
+        for rel_name, rel_data in test_data.items():
+            self._add_relation(rel_name, rel_data)
+            self.harness.update_config()
+
+        # Assert that the unit is currently active.
+        self.assertIsInstance(
+            self.harness.charm.unit.status, model.ActiveStatus)
+
+        # Assert that the initial Callback URIs have been set.
+        relation_data = self.harness.get_relation_data(gitlab_rel_id, self.harness.charm.app)
+        self.assertEqual(relation_data, {})
+
+        # Update the external-hostname config option and assert that the relation data changed.
+        self.harness.update_config({"external-hostname": "foo.lish"})
+
+        relation_data = self.harness.get_relation_data(gitlab_rel_id, self.harness.charm.app)
+        self.assertEqual(relation_data, {})
 
     @mock.patch("ops.testing._TestingPebbleClient.restart_services")
     @mock.patch("ops.testing._TestingPebbleClient.stop_services")
