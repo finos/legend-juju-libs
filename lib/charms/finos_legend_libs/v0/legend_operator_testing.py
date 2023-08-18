@@ -166,7 +166,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         getattr(self.harness.charm.on, "%s_pebble_ready" % container_name).emit(container)
 
     def _test_workload_container(self):
-        self.harness.begin()
+        self.harness.begin_with_initial_hooks()
         self.assertEqual(
             self.harness.charm._workload_container,
             self.harness.model.unit.get_container(
@@ -182,7 +182,7 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
                 self.harness.charm._get_logging_level_from_config(option_name), log_opt)
 
         # Invalid test:
-        self.harness.update_config({option_name: 13})
+        self.harness.update_config({option_name: '13'})
         self.assertIsNone(
             self.harness.charm._get_logging_level_from_config(option_name))
 

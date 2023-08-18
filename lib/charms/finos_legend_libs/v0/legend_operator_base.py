@@ -597,8 +597,6 @@ class BaseFinosLegendCharm(charm.CharmBase):
         # to allow for the `_refresh_charm_status` method do determine
         # if all the relations are present and write the configs itself:
         # container.autostart()
-
-        self._update_gitlab_relation_callback_uris()
         self._refresh_charm_status()
 
 
@@ -753,6 +751,12 @@ class BaseFinosLegendCoreServiceCharm(BaseFinosLegendCharm):
         redirect_uris = self._get_legend_gitlab_redirect_uris()
         legend_gitlab.set_legend_gitlab_redirect_uris_in_relation_data(
             relation.data[self.app], redirect_uris)
+
+    def _on_workload_container_pebble_ready(
+            self, event: charm.PebbleReadyEvent):
+        super()._on_workload_container_pebble_ready(event)
+        # NOTE(fabi200123): We need to update the gitlab integrator with the new URIs as well.
+        self._update_gitlab_relation_callback_uris()
 
     def _on_config_changed(self, event: charm.ConfigChangedEvent):
         """Refreshes the service config."""
