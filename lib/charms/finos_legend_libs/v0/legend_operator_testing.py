@@ -21,7 +21,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 
 TEST_CERTIFICATE_BASE64 = """
@@ -357,6 +357,9 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
         gitlab_rel_data = test_data.pop(gitlab_rel_name)
         gitlab_rel_id = self._add_relation(gitlab_rel_name, gitlab_rel_data)
 
+        # Add the ingress relation and grab its relation ID.
+        ingress_rel_id = self._add_relation('ingress', {})
+
         # Add the rest of the necessary relations.
         for rel_name, rel_data in test_data.items():
             self._add_relation(rel_name, rel_data)
@@ -380,6 +383,13 @@ class BaseFinosLegendCharmTestCase(unittest.TestCase):
 
         relation_data = self.harness.get_relation_data(gitlab_rel_id, self.harness.charm.app)
         expected_rel_data = {'legend-gitlab-redirect-uris': json.dumps(fake_callback_uris)}
+        self.assertDictEqual(expected_rel_data, relation_data)
+
+        relation_data = self.harness.get_relation_data(ingress_rel_id, self.harness.charm.app)
+        expected_rel_data = {
+            "service-hostname": "foo.lish",
+            "path-routes": self.harness.charm._get_ingress_routes(),
+        }
         self.assertDictEqual(expected_rel_data, relation_data)
 
     @mock.patch("ops.testing._TestingPebbleClient.restart_services")

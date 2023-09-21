@@ -25,7 +25,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 logger = logging.getLogger(__name__)
 
@@ -579,7 +579,10 @@ class BaseFinosLegendCharm(charm.CharmBase):
     def _on_config_changed(self, event: charm.ConfigChangedEvent):
         """Refreshes the service config."""
         svc_hostname = self.model.config["external-hostname"] or self.app.name
-        self.ingress.update_config({"service-hostname": svc_hostname})
+        self.ingress.update_config({
+            "service-hostname": svc_hostname,
+            "path-routes": self._get_ingress_routes(),
+        })
         self._refresh_charm_status()
 
     def _on_workload_container_pebble_ready(
