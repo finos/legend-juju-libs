@@ -1,8 +1,0 @@
-# Copyright 2021 Canonical
-# See LICENSE file for licensing details.
-
-# TODO(aznashwan): determine if the SDLC offers any actions
-# Possible ones may include:
-#   - creating a Gitlab project (or whatever other "bootstrapping actions"
-#     are needed on Gitlab)
-#   - creating a legend "workspace" (i.e. tenant)
